@@ -18,6 +18,8 @@ import elliot.hyperoptimization as ho
 from elliot.namespace.namespace_model_builder import NameSpaceBuilder
 from elliot.result_handler.result_handler import ResultHandler, HyperParameterStudy, StatTest
 from elliot.utils import logging as logging_project
+from functools import reduce
+import pandas as pd
 
 _rstate = np.random.RandomState(42)
 here = path.abspath(path.dirname(__file__))
@@ -59,10 +61,14 @@ def run_experiment(config_path: str = ''):
     dataloader_class = getattr(importlib.import_module("elliot.dataset"), base.base_namespace.data_config.dataloader)
     dataloader = dataloader_class(config=base.base_namespace)
     data_test_list = dataloader.generate_dataobjects()
+    all_trials = {}
+    cleaned_all_trials = {}
     for key, model_base in builder.models():
         test_results = []
         test_trials = []
+        all_trials[key] = []
         for test_fold_index, data_test in enumerate(data_test_list):
+
             logging_project.prepare_logger(key, base.base_namespace.path_log_folder)
             if key.startswith("external."):
                 spec = importlib.util.spec_from_file_location("external",
@@ -94,7 +100,7 @@ def run_experiment(config_path: str = ''):
                 best_model_params = trials._trials[min_val]["result"]["params"]
                 best_model_results = trials._trials[min_val]["result"]["test_results"]
                 ############################################
-
+                all_trials[key].append([el["result"] for el in trials._trials])
                 # aggiunta a lista performance test
                 test_results.append(trials._trials[min_val]["result"])
                 test_trials.append(trials)
@@ -108,7 +114,7 @@ def run_experiment(config_path: str = ''):
                 best_model_params = single["params"]
                 best_model_results = single["test_results"]
                 ############################################
-
+                all_trials[key].append([single])
                 # aggiunta a lista performance test
                 test_results.append(single)
                 logger.info(f"Training ended for {model_class.__name__}")
@@ -119,7 +125,7 @@ def run_experiment(config_path: str = ''):
 
         # Migliore sui test, aggiunta a performance totali
         min_val = np.argmin([i["loss"] for i in test_results])
-
+        cleaned_all_trials[key] = all_trials[key][min_val]
         res_handler.add_oneshot_recommender(**test_results[min_val])
 
         if isinstance(model_base, tuple):
@@ -146,6 +152,18 @@ def run_experiment(config_path: str = ''):
                                                   output=base.base_namespace.path_output_rec_performance)
 
     logger.info("End experiment")
+    for k in cleaned_all_trials.keys():
+        print(f"KEY: {k} ")
+        for i in range(0, len(cleaned_all_trials[k])):
+            print(cleaned_all_trials[k][i]['name'])
+            for el in cleaned_all_trials[k][i]['test_statistical_results']:
+                lista = []
+                print(f"CUT-OFF: {el}")
+                for metric in cleaned_all_trials[k][i]['test_statistical_results'][el].keys():
+                    lista.append(pd.DataFrame(cleaned_all_trials[k][i]['test_statistical_results'][el][metric].items(),
+                                              columns=['User', metric]))
+                df_merge = reduce(lambda x, y: pd.merge(x, y, on='User'), lista)
+                df_merge.to_csv("results/movielens_1m/per_user/" + cleaned_all_trials[k][i]['name'] + "_cutoff=" + str(el) + ".tsv", sep='\t', index=False)
 
 
 def _reset_verbose_option(model):
