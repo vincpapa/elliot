@@ -1,27 +1,27 @@
 experiment:
-  dataset: movielens_1m
+  dataset: goodreads
   data_config:
-    strategy: dataset
+    strategy: fixed
 #    root_folder: ../data/{0}/splitting
-    dataset_path: ../data/{0}/dataset.tsv
-#    train_path: /home/sisinflab/PycharmProjects/elliot/data/movielens_1m/splitting/0/0/train.tsv
-#    validation_path: /home/sisinflab/PycharmProjects/elliot/data/movielens_1m/splitting/0/0/validation.tsv
-#    test_path: /home/sisinflab/PycharmProjects/elliot/data/movielens_1m/splitting/0/test.tsv
+#    dataset_path: ../data/{0}/dataset.tsv
+    train_path: ../data/goodreads/train.tsv
+    validation_path: ../data/goodreads/validation.tsv
+    test_path: ../data/goodreads/test.tsv
 #  prefiltering:
 #    - strategy: global_threshold
 #      threshold: 3
 #    - strategy: iterative_k_core
 #      core: 5
   binarize: True
-  splitting:
-    save_on_disk: True
-    save_folder: ../splitting/{0}
-    test_splitting:
-      strategy: random_subsampling
-      test_ratio: 0.2
-    validation_splitting:
-      strategy: random_subsampling
-      test_ratio: 0.1
+#  splitting:
+#    save_on_disk: True
+#    save_folder: ../splitting/{0}
+#    test_splitting:
+#      strategy: random_subsampling
+#      test_ratio: 0.2
+#    validation_splitting:
+#      strategy: random_subsampling
+#      test_ratio: 0.1
 #  negative_sampling:
 #    strategy: fixed
 #    files: ["/home/cheggynho/PycharmProjects/elliot/data/ncf_pinterest/pinterest-20.test.negative"]
@@ -29,6 +29,18 @@ experiment:
   evaluation:
     cutoffs: 10
     simple_metrics: [nDCG, Recall, HR, F1, MAP, MAR, MRR, Gini, SEntropy, EFD, EPC, ACLT, APLT, PopREO, PopRSP, ItemCoverage, UserCoverage]
+    complex_metrics:
+      - metric: UserMADranking
+        clustering_name: WarmColdUsers
+        clustering_file: ../data/goodreads/u_clusters.tsv
+      - metric: UserMADrating
+        clustering_name: WarmColdUsers
+        clustering_file: ../data/goodreads/u_clusters.tsv
+      - metric: BiasDisparityBD
+        user_clustering_name: WarmColdUsers
+        user_clustering_file: ../data/goodreads/u_clusters.tsv
+        item_clustering_name: ItemPopularity
+        item_clustering_file: ../data/goodreads/i_clusters.tsv
     paired_ttest: True
     wilcoxon_test: True
   print_results_as_triplets: True

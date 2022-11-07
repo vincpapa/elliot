@@ -163,7 +163,7 @@ def run_experiment(config_path: str = ''):
                     lista.append(pd.DataFrame(cleaned_all_trials[k][i]['test_statistical_results'][el][metric].items(),
                                               columns=['User', metric]))
                 df_merge = reduce(lambda x, y: pd.merge(x, y, on='User'), lista)
-                df_merge.to_csv("results/movielens_1m/per_user/" + cleaned_all_trials[k][i]['name'] + "_cutoff=" + str(el) + ".tsv", sep='\t', index=False)
+                df_merge.to_csv("results/per_user/" + cleaned_all_trials[k][i]['name'] + "_cutoff=" + str(el) + ".tsv", sep='\t', index=False)
 
 
 def _reset_verbose_option(model):

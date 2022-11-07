@@ -116,7 +116,7 @@ class Splitter:
             if isinstance(train_val, list):
                 for j, (train, val) in enumerate(train_val):
                     actual_val_folder = create_folder_by_index(actual_test_folder, str(j))
-                    val.to_csv(os.path.abspath(os.sep.join([actual_val_folder, "val.tsv"])), sep='\t', index=False, header=False)
+                    val.to_csv(os.path.abspath(os.sep.join([actual_val_folder, "validation.tsv"])), sep='\t', index=False, header=False)
                     train.to_csv(os.path.abspath(os.sep.join([actual_val_folder, "train.tsv"])), sep='\t', index=False, header=False)
             else:
                 train_val.to_csv(os.path.abspath(os.sep.join([actual_test_folder, "train.tsv"])), sep='\t', index=False, header=False)
