@@ -1,6 +1,5 @@
-from elliot.recommender.graph_based import import_model_by_backend
+from .NGCF import NGCF
 
-import_model_by_backend("pass", "from .ngcf.NGCF import NGCF")
 
 
 
