@@ -6,6 +6,7 @@ experiment:
     validation_path: ../data/amazon_music/validation.tsv
     test_path: ../data/amazon_music/test.tsv
   binarize: True
+  gpu: 0
   top_k: 10
   evaluation:
     cutoffs: 10
