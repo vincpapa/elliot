@@ -14,7 +14,6 @@ from .latent_factor_models import BPRMF, BPRMF_batch, WRMF, PureSVD, MF, FunkSVD
 from .unpersonalized import Random, MostPop
 from .autoencoders import MultiDAE, MultiVAE, EASER
 from .knowledge_aware import KaHFM, KaHFMBatch, KaHFMEmbeddings
-from .graph_based import NGCF, LightGCN, RP3beta
 from .visual_recommenders import VBPR, DeepStyle, ACF, DVBPR, VNPR
 from .knn import ItemKNN, UserKNN, AttributeItemKNN, AttributeUserKNN
 from .neural import DeepFM, DMF, NeuMF, NFM, GMF, NAIS, UserAutoRec, ItemAutoRec, ConvNeuMF, WideAndDeep, ConvMF, NPR
