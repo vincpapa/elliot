@@ -1,0 +1,35 @@
+experiment:
+  dataset: amazon_music
+  data_config:
+    strategy: fixed
+    train_path: ../data/amazon_music/train.tsv
+    validation_path: ../data/amazon_music/validation.tsv
+    test_path: ../data/amazon_music/test.tsv
+  binarize: True
+  top_k: 10
+  evaluation:
+    cutoffs: 10
+    simple_metrics: [nDCG, Recall, HR, MAR, Gini, SEntropy, EFD, EPC, ACLT, APLT, PopREO, PopRSP]
+    complex_metrics:
+      - metric: UserMADranking
+        clustering_name: WarmColdUsers
+        clustering_file: ../data/amazon_music/u_clusters.tsv
+      - metric: UserMADrating
+        clustering_name: WarmColdUsers
+        clustering_file: ../data/amazon_music/u_clusters.tsv
+      - metric: BiasDisparityBD
+        user_clustering_name: WarmColdUsers
+        user_clustering_file: ../data/amazon_music/u_clusters.tsv
+        item_clustering_name: ItemPopularity
+        item_clustering_file: ../data/amazon_music/i_clusters.tsv
+    paired_ttest: True
+    wilcoxon_test: True
+  print_results_as_triplets: True
+  external_models_path: ../external/models/__init__.py
+  models:
+    EASER:
+      meta:
+        verbose: True
+        save_recs: True
+        validation_metric: nDCG@10
+      l2_norm: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1100, 1200, 1300, 1400, 1600, 1700, 1800, 2000, 2500, 3000 ] #[ 100, 200, 300, 400, 500, 1000, 1500, 2000, 2500, 3000 ]

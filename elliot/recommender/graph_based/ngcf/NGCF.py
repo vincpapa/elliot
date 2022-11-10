@@ -3,23 +3,21 @@ Module description:
 
 """
 
-__version__ = '0.3.1'
+__version__ = '0.3.0'
 __author__ = 'Vito Walter Anelli, Claudio Pomo, Daniele Malitesta'
 __email__ = 'vitowalter.anelli@poliba.it, claudio.pomo@poliba.it, daniele.malitesta@poliba.it'
 
-import random
-from ast import literal_eval as make_tuple
-
-import numpy as np
-import scipy.sparse as sp
 from tqdm import tqdm
+import numpy as np
+import torch
+import os
 
-from elliot.dataset.samplers import custom_sampler as cs
+from elliot.utils.write import store_recommendation
+from elliot.dataset.samplers import custom_sampler_batch as csb
 from elliot.recommender import BaseRecommenderModel
 from elliot.recommender.base_recommender_model import init_charger
-from elliot.recommender.graph_based.ngcf.NGCF_model import NGCFModel
 from elliot.recommender.recommender_utils_mixin import RecMixin
-from elliot.utils.write import store_recommendation
+from .NGCFModel import NGCFModel
 
 
 class NGCF(RecMixin, BaseRecommenderModel):
@@ -37,7 +35,6 @@ class NGCF(RecMixin, BaseRecommenderModel):
         weight_size: Tuple with number of units for each embedding propagation layer
         node_dropout: Tuple with dropout rate for each node
         message_dropout: Tuple with dropout rate for each embedding propagation layer
-        n_fold: Number of folds to split the adjacency matrix into sub-matrices and ease the computation
 
     To include the recommendation model, add it to the config file adopting the following pattern:
 
@@ -51,40 +48,33 @@ class NGCF(RecMixin, BaseRecommenderModel):
           epochs: 50
           batch_size: 512
           factors: 64
-          batch_size: 256
           l_w: 0.1
           weight_size: (64,)
           node_dropout: ()
           message_dropout: (0.1,)
-          n_fold: 5
     """
     @init_charger
     def __init__(self, data, config, params, *args, **kwargs):
-
-        self._ratings = self._data.train_dict
-        self._sampler = cs.Sampler(self._data.i_train_dict)
-        if self._batch_size < 1:
-            self._batch_size = self._num_users
-
         ######################################
 
         self._params_list = [
-            ("_learning_rate", "lr", "lr", 0.0005, None, None),
-            ("_factors", "latent_dim", "factors", 64, None, None),
-            ("_l_w", "l_w", "l_w", 0.01, None, None),
-            ("_weight_size", "weight_size", "weight_size", "(64,)", lambda x: list(make_tuple(x)),
-             lambda x: self._batch_remove(str(x), " []").replace(",", "-")),
-            ("_node_dropout", "node_dropout", "node_dropout", "()", lambda x: list(make_tuple(x)),
-             lambda x: self._batch_remove(str(x), " []").replace(",", "-")),
-            ("_message_dropout", "message_dropout", "message_dropout", "(0.1,)", lambda x: list(make_tuple(x)),
-             lambda x: self._batch_remove(str(x), " []").replace(",", "-")),
-            ("_n_fold", "n_fold", "n_fold", 5, None, None)
+            ("_learning_rate", "lr", "lr", 0.0005, float, None),
+            ("_factors", "factors", "factors", 64, int, None),
+            ("_l_w", "l_w", "l_w", 0.01, float, None),
+            ("_n_layers", "n_layers", "n_layers", 3, int, None),
+            ("_weight_size", "weight_size", "weight_size", 64, int, None),
+            ("_node_dropout", "node_dropout", "node_dropout", 0.0, float, None),
+            ("_message_dropout", "message_dropout", "message_dropout", 0.5, float, None)
         ]
         self.autoset_params()
 
-        self._n_layers = len(self._weight_size)
+        self._sampler = csb.Sampler(self._data.i_train_dict, self._seed)
+        if self._batch_size < 1:
+            self._batch_size = self._num_users
 
-        self._adjacency, self._laplacian = self._create_adj_mat()
+        row, col = data.sp_i_train.nonzero()
+        col = [c + self._num_users for c in col]
+        self.edge_index = np.array([row, col])
 
         self._model = NGCFModel(
             num_users=self._num_users,
@@ -96,36 +86,9 @@ class NGCF(RecMixin, BaseRecommenderModel):
             n_layers=self._n_layers,
             node_dropout=self._node_dropout,
             message_dropout=self._message_dropout,
-            n_fold=self._n_fold,
-            adjacency=self._adjacency,
-            laplacian=self._laplacian,
+            edge_index=self.edge_index,
             random_seed=self._seed
         )
-
-    def _create_adj_mat(self):
-        adjacency = sp.dok_matrix((self._num_users + self._num_items,
-                                   self._num_users + self._num_items), dtype=np.float32)
-        adjacency = adjacency.tolil()
-        ratings = self._data.sp_i_train.tolil()
-
-        adjacency[:self._num_users, self._num_users:] = ratings
-        adjacency[self._num_users:, :self._num_users] = ratings.T
-        adjacency = adjacency.todok()
-
-        def normalized_adj_bi(adj):
-            # This is exactly how it's done in the paper. Different normalization approaches might be followed.
-            rowsum = np.array(adj.sum(1))
-            rowsum += 1e-7  # to avoid division by zero warnings
-
-            d_inv_sqrt = np.power(rowsum, -0.5).flatten()
-            d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
-            d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
-            bi_adj = adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt)
-            return bi_adj.tocoo()
-
-        laplacian = normalized_adj_bi(adjacency)
-
-        return adjacency.tocsr(), laplacian.tocsr()
 
     @property
     def name(self):
@@ -140,23 +103,82 @@ class NGCF(RecMixin, BaseRecommenderModel):
         for it in self.iterate(self._epochs):
             loss = 0
             steps = 0
+            self._model.train()
             with tqdm(total=int(self._data.transactions // self._batch_size), disable=not self._verbose) as t:
                 for batch in self._sampler.step(self._data.transactions, self._batch_size):
                     steps += 1
                     loss += self._model.train_step(batch)
-                    t.set_postfix({'loss': f'{loss.numpy() / steps:.5f}'})
+                    t.set_postfix({'loss': f'{loss / steps:.5f}'})
                     t.update()
 
-            self.evaluate(it, loss.numpy()/(it + 1))
+            self.evaluate(it, loss / (it + 1))
 
     def get_recommendations(self, k: int = 100):
         predictions_top_k_test = {}
         predictions_top_k_val = {}
-        for index, offset in enumerate(range(0, self._num_users, self._batch_size)):
-            offset_stop = min(offset + self._batch_size, self._num_users)
-            predictions = self._model.predict(offset, offset_stop)
-            recs_val, recs_test = self.process_protocol(k, predictions, offset, offset_stop)
-            predictions_top_k_val.update(recs_val)
-            predictions_top_k_test.update(recs_test)
+        self._model.eval()
+        with torch.no_grad():
+            for index, offset in enumerate(range(0, self._num_users, self._batch_size)):
+                offset_stop = min(offset + self._batch_size, self._num_users)
+                predictions = self._model.predict(offset, offset_stop)
+                recs_val, recs_test = self.process_protocol(k, predictions, offset, offset_stop)
+                predictions_top_k_val.update(recs_val)
+                predictions_top_k_test.update(recs_test)
         return predictions_top_k_val, predictions_top_k_test
 
+    def get_single_recommendation(self, mask, k, predictions, offset, offset_stop):
+        v, i = self._model.get_top_k(predictions, mask[offset: offset_stop], k=k)
+        items_ratings_pair = [list(zip(map(self._data.private_items.get, u_list[0]), u_list[1]))
+                              for u_list in list(zip(i.detach().cpu().numpy(), v.detach().cpu().numpy()))]
+        return dict(zip(map(self._data.private_users.get, range(offset, offset_stop)), items_ratings_pair))
+
+    def evaluate(self, it=None, loss=0):
+        if (it is None) or (not (it + 1) % self._validation_rate):
+            recs = self.get_recommendations(self.evaluator.get_needed_recommendations())
+            result_dict = self.evaluator.eval(recs)
+
+            self._losses.append(loss)
+
+            self._results.append(result_dict)
+
+            if it is not None:
+                self.logger.info(f'Epoch {(it + 1)}/{self._epochs} loss {loss/(it + 1):.5f}')
+            else:
+                self.logger.info(f'Finished')
+
+            if self._save_recs:
+                self.logger.info(f"Writing recommendations at: {self._config.path_output_rec_result}")
+                if it is not None:
+                    store_recommendation(recs[1], os.path.abspath(
+                        os.sep.join([self._config.path_output_rec_result, f"{self.name}_it={it + 1}.tsv"])))
+                else:
+                    store_recommendation(recs[1], os.path.abspath(
+                        os.sep.join([self._config.path_output_rec_result, f"{self.name}.tsv"])))
+
+            if (len(self._results) - 1) == self.get_best_arg():
+                if it is not None:
+                    self._params.best_iteration = it + 1
+                self.logger.info("******************************************")
+                self.best_metric_value = self._results[-1][self._validation_k]["val_results"][self._validation_metric]
+                if self._save_weights:
+                    if hasattr(self, "_model"):
+                        torch.save({
+                            'model_state_dict': self._model.state_dict(),
+                            'optimizer_state_dict': self._model.optimizer.state_dict()
+                        }, self._saving_filepath)
+                    else:
+                        self.logger.warning("Saving weights FAILED. No model to save.")
+
+    def restore_weights(self):
+        try:
+            checkpoint = torch.load(self._saving_filepath)
+            self._model.load_state_dict(checkpoint['model_state_dict'])
+            self._model.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            print(f"Model correctly Restored")
+            self.evaluate()
+            return True
+
+        except Exception as ex:
+            raise Exception(f"Error in model restoring operation! {ex}")
+
+        return False

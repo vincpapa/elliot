@@ -135,7 +135,7 @@ class DataSetLoader(LoaderCoordinator):
                 val_list = []
                 for val_dir in val_dirs:
                     train_ = pd.read_csv(os.sep.join([val_dir, "train.tsv"]), sep="\t", names=self.column_names)
-                    val_ = pd.read_csv(os.sep.join([val_dir, "val.tsv"]), sep="\t", names=self.column_names)
+                    val_ = pd.read_csv(os.sep.join([val_dir, "validation.tsv"]), sep="\t", names=self.column_names)
                     val_list.append((train_, val_))
                 if not val_list:
                     val_list = pd.read_csv(os.sep.join([folder_path, test_dir, "train.tsv"]), sep="\t",
