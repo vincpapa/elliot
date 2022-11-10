@@ -27,21 +27,17 @@ experiment:
   print_results_as_triplets: True
   external_models_path: ../external/models/__init__.py
   models:
-    MultiVAE:
+    LightGCN:
       meta:
         validation_rate: 1
         verbose: True
         save_recs: True
         validation_metric: nDCG@10
         optimize_internal_loss: False
-      lr: [0.01, 0.001] #0.002718457840118028
+      lr: [ 0.0001, 0.0005, 0.001, 0.005 ]
       epochs: 100
-      intermediate_dim: [100, 200, 300] #91
-      latent_dim: [50, 100, 200, 300] #100
-      batch_size: -1
-      dropout_pkeep: [0.8, 1]
-      reg_lambda: 0 #[0, 0.01]
-      early_stopping:
-        patience: 10
-        verbose: True
-        monitor: nDCG@10
+      factors: [ 64, 128, 256 ]
+      batch_size: 256
+      l_w: 1e-4
+      n_layers: [ 1, 2, 3, 4 ]
+      seed: 42
